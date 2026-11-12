@@ -1,0 +1,8 @@
+{
+  "name": "ZARIYA — Pakistani Women's Fashion & Eastern Wear",
+  "description": "Pakistan's premier women's fashion online store offering embroidered lawn, luxury chiffon, festive organza, stitched pret, and winter khaddar with nationwide Cash on Delivery.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
