@@ -41,6 +41,11 @@ import {
   extractProductSizes,
   extractProductColors,
 } from '../components/storefront/ShopAllProductsPage';
+import {
+  buildShortInvoiceData,
+  createShortInvoicePdfDoc,
+  getShortInvoiceFilename,
+} from './invoice-pdf';
 
 const mockPkrCurrency: Currency = {
   code: 'PKR',
@@ -690,3 +695,57 @@ test('Pakistan Checkout: PKR pricing, discount + gift card calculation, card tok
   assert.equal(created2.orderId, created1.orderId);
   assert.equal(stockAfterSecond, initialStock - 2);
 });
+
+test('Short Invoice PDF: builds clean invoice summary and valid A5 PDF output for Pakistani orders', () => {
+  const sampleOrder = storeDb.getOrders()[0];
+  assert.ok(sampleOrder, 'Expected at least one seeded order in storeDb');
+
+  const pkrCurrency = storeDb.getCurrencyByCode('PKR');
+  const settings = storeDb.getSettings();
+  const invoiceData = buildShortInvoiceData(sampleOrder, pkrCurrency, settings);
+
+  assert.equal(invoiceData.orderNumber, sampleOrder.orderNumber);
+  assert.equal(invoiceData.invoiceNumber, `INV-${sampleOrder.orderNumber}`);
+  assert.equal(invoiceData.storeName, settings.storeName);
+  assert.ok(invoiceData.items.length >= 1);
+
+  const filename = getShortInvoiceFilename(sampleOrder.orderNumber);
+  assert.ok(filename.startsWith('ZARIYA-Short-Invoice-'));
+  assert.ok(filename.endsWith('.pdf'));
+
+  const doc = createShortInvoicePdfDoc(sampleOrder, pkrCurrency, settings);
+  const pdfOutput = doc.output('datauristring');
+  assert.ok(pdfOutput.startsWith('data:application/pdf;'));
+
+  const rawPdf = doc.output();
+  assert.ok(rawPdf.startsWith('%PDF-'), 'Expected valid PDF binary header');
+});
+
+test('Bulk Product Delete: storeDb.deleteProductsBulk removes multiple selected/filtered products at once', () => {
+  const tempA: Product = {
+    ...mockProduct,
+    id: 'temp_bulk_del_a',
+    slug: 'temp-bulk-del-a',
+    sku: 'TMP-BULK-A',
+    name: 'Temp Bulk Delete Suit A',
+  };
+  const tempB: Product = {
+    ...mockProduct,
+    id: 'temp_bulk_del_b',
+    slug: 'temp-bulk-del-b',
+    sku: 'TMP-BULK-B',
+    name: 'Temp Bulk Delete Suit B',
+  };
+
+  storeDb.saveProduct(tempA);
+  storeDb.saveProduct(tempB);
+  const countBefore = storeDb.getProducts().length;
+
+  const deletedCount = storeDb.deleteProductsBulk(['temp_bulk_del_a', 'temp_bulk_del_b', 'non_existent_id']);
+  assert.equal(deletedCount, 2);
+  assert.equal(storeDb.getProducts().length, countBefore - 2);
+  assert.equal(storeDb.getProductById('temp_bulk_del_a'), undefined);
+  assert.equal(storeDb.getProductById('temp_bulk_del_b'), undefined);
+});
+
+

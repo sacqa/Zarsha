@@ -115,6 +115,11 @@ export const ProductsAndCollectionsSection: React.FC<ProductsAndCollectionsProps
   const [formVariants, setFormVariants] = useState<ProductVariant[]>([]);
   const [formMetafields, setFormMetafields] = useState<ProductMetafield[]>([]);
   const [productToDelete, setProductToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [bulkProductsToDelete, setBulkProductsToDelete] = useState<{
+    ids: string[];
+    names: string[];
+    sourceLabel: string;
+  } | null>(null);
 
   // --- Collections State ---
   const collections = storeDb.getCollections();
@@ -358,6 +363,52 @@ export const ProductsAndCollectionsSection: React.FC<ProductsAndCollectionsProps
     } else {
       setSelectedProdIds(filteredProducts.map((p) => p.id));
     }
+  };
+
+  const hasActiveProductFilter =
+    prodStatusFilter !== 'all' || prodCategoryFilter !== 'all' || prodSearch.trim().length > 0;
+
+  const handleRequestBulkDeleteFiltered = () => {
+    if (filteredProducts.length === 0) return;
+    const filterParts: string[] = [];
+    if (prodStatusFilter !== 'all') {
+      filterParts.push(`Status: ${prodStatusFilter === 'published' ? 'Active' : prodStatusFilter}`);
+    }
+    if (prodCategoryFilter !== 'all') {
+      filterParts.push(`Category: ${prodCategoryFilter}`);
+    }
+    if (prodSearch.trim()) {
+      filterParts.push(`Search: "${prodSearch.trim()}"`);
+    }
+    setBulkProductsToDelete({
+      ids: filteredProducts.map((p) => p.id),
+      names: filteredProducts.map((p) => p.name),
+      sourceLabel:
+        filterParts.length > 0
+          ? `Filtered products (${filterParts.join(' · ')})`
+          : 'All displayed products in catalog',
+    });
+  };
+
+  const handleRequestBulkDeleteSelected = () => {
+    if (selectedProdIds.length === 0) return;
+    const selectedSet = new Set(selectedProdIds);
+    const matched = products.filter((p) => selectedSet.has(p.id));
+    setBulkProductsToDelete({
+      ids: matched.map((p) => p.id),
+      names: matched.map((p) => p.name),
+      sourceLabel: `${matched.length} selected product(s)`,
+    });
+  };
+
+  const handleConfirmBulkDeleteProducts = () => {
+    if (!bulkProductsToDelete) return;
+    const deletedCount = storeDb.deleteProductsBulk(bulkProductsToDelete.ids);
+    const deletedSet = new Set(bulkProductsToDelete.ids);
+    setSelectedProdIds((prev) => prev.filter((id) => !deletedSet.has(id)));
+    setBulkProductsToDelete(null);
+    onRefreshData();
+    triggerToast(`Deleted ${deletedCount} product(s) from catalog.`);
   };
 
   const handleExportProductsCsv = () => {
@@ -677,6 +728,27 @@ export const ProductsAndCollectionsSection: React.FC<ProductsAndCollectionsProps
                   className="w-full pl-8 pr-3 py-1.5 bg-white border border-neutral-300 rounded-lg text-xs focus:outline-hidden focus:border-neutral-900"
                 />
               </div>
+
+              {filteredProducts.length > 0 && (
+                <button
+                  type="button"
+                  data-testid="bulk-delete-filtered-btn"
+                  onClick={handleRequestBulkDeleteFiltered}
+                  title={
+                    hasActiveProductFilter
+                      ? 'Bulk delete all products matching the current filter'
+                      : 'Bulk delete all currently listed products'
+                  }
+                  className="px-3 py-1.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>
+                    {hasActiveProductFilter
+                      ? `Bulk Delete Filtered (${filteredProducts.length})`
+                      : `Bulk Delete (${filteredProducts.length})`}
+                  </span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -770,6 +842,15 @@ export const ProductsAndCollectionsSection: React.FC<ProductsAndCollectionsProps
                   className="px-2.5 py-1 bg-[#8a1538] hover:bg-[#72112d] rounded-md font-medium cursor-pointer"
                 >
                   Apply Tag
+                </button>
+                <button
+                  type="button"
+                  data-testid="bulk-delete-selected-btn"
+                  onClick={handleRequestBulkDeleteSelected}
+                  className="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white rounded-md font-semibold flex items-center gap-1 cursor-pointer"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Delete ({selectedProdIds.length})</span>
                 </button>
                 <button
                   onClick={() => setSelectedProdIds([])}
@@ -2088,6 +2169,70 @@ export const ProductsAndCollectionsSection: React.FC<ProductsAndCollectionsProps
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold cursor-pointer"
               >
                 Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CONFIRM BULK DELETE PRODUCTS */}
+      {bulkProductsToDelete && (
+        <div
+          className="fixed inset-0 z-50 bg-neutral-950/60 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setBulkProductsToDelete(null)}
+        >
+          <div
+            data-testid="bulk-delete-confirm-modal"
+            className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-neutral-900">
+                  Bulk Delete {bulkProductsToDelete.ids.length} Product(s)?
+                </h3>
+                <p className="text-xs text-neutral-600 mt-1">
+                  Scope: <strong className="text-neutral-800">{bulkProductsToDelete.sourceLabel}</strong>
+                </p>
+              </div>
+            </div>
+
+            <div className="max-h-36 overflow-y-auto bg-neutral-50 border border-neutral-200 rounded-xl p-3 space-y-1 text-xs text-neutral-700">
+              {bulkProductsToDelete.names.slice(0, 6).map((name, idx) => (
+                <div key={idx} className="truncate">
+                  • {name}
+                </div>
+              ))}
+              {bulkProductsToDelete.names.length > 6 && (
+                <div className="text-[11px] font-semibold text-neutral-500 pt-1">
+                  + {bulkProductsToDelete.names.length - 6} more product(s)
+                </div>
+              )}
+            </div>
+
+            <p className="text-[11px] text-red-600 font-medium">
+              This action permanently removes these products from your storefront catalog.
+            </p>
+
+            <div className="flex justify-end gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setBulkProductsToDelete(null)}
+                className="px-4 py-2 border border-neutral-300 rounded-lg text-xs font-semibold text-neutral-700 hover:bg-neutral-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                data-testid="confirm-bulk-delete-btn"
+                onClick={handleConfirmBulkDeleteProducts}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Permanently ({bulkProductsToDelete.ids.length})</span>
               </button>
             </div>
           </div>

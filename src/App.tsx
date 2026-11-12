@@ -681,6 +681,7 @@ export default function App() {
             order={completedOrder}
             allOrders={orders}
             currentCurrency={currentCurrency}
+            settings={settings}
             onContinueShopping={() => navigateTo('home')}
             onViewOrderReceipt={(ord) => setReceiptModalOrder(ord)}
             onOpenCustomerAccount={() => setIsAccountOpen(true)}
@@ -920,6 +921,8 @@ export default function App() {
 
       <OrderConfirmationModal
         order={receiptModalOrder}
+        currency={currentCurrency}
+        settings={settings}
         onClose={() => setReceiptModalOrder(null)}
       />
 

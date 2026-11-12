@@ -5,6 +5,8 @@ import {
   Mail,
   FileText,
   Printer,
+  Download,
+  Receipt,
   ArrowRight,
   CreditCard,
   MapPin,
@@ -15,14 +17,17 @@ import {
   PartyPopper,
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Currency, ImmutableOrderSnapshot } from '../../types/ecommerce';
+import { Currency, ImmutableOrderSnapshot, StoreSettings } from '../../types/ecommerce';
 import { formatMinorUnits } from '../../utils/commerce-engine';
+import { downloadShortInvoicePdf } from '../../utils/invoice-pdf';
+import { ShortInvoiceCard } from './ShortInvoiceCard';
 import { triggerFestiveConfetti } from '../common/FestiveConfetti';
 
 interface OrderConfirmationPageProps {
   order: ImmutableOrderSnapshot | null;
   allOrders: ImmutableOrderSnapshot[];
   currentCurrency: Currency;
+  settings?: Partial<StoreSettings>;
   onContinueShopping: () => void;
   onViewOrderReceipt: (order: ImmutableOrderSnapshot) => void;
   onOpenCustomerAccount: () => void;
@@ -32,12 +37,15 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
   order,
   allOrders,
   currentCurrency,
+  settings,
   onContinueShopping,
   onViewOrderReceipt,
   onOpenCustomerAccount,
 }) => {
   const [emailResentAt, setEmailResentAt] = useState<string | null>(null);
   const [showEmailPreview, setShowEmailPreview] = useState<boolean>(true);
+  const [showShortInvoice, setShowShortInvoice] = useState<boolean>(false);
+  const [pdfDownloaded, setPdfDownloaded] = useState<boolean>(false);
 
   useEffect(() => {
     if (!order) return;
@@ -74,6 +82,12 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
     );
   }
 
+  const handleDownloadInvoicePdf = () => {
+    downloadShortInvoicePdf(order, currentCurrency, settings);
+    setPdfDownloaded(true);
+    window.setTimeout(() => setPdfDownloaded(false), 3000);
+  };
+
   const customerOrderHistory = allOrders.filter(
     (o) => o.customer.email.toLowerCase() === order.customer.email.toLowerCase()
   );
@@ -92,10 +106,11 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
   const billingAddr = order.billingAddress || order.shippingAddress;
 
   return (
-    <div
-      data-testid="order-confirmation-page"
-      className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8 text-white"
-    >
+    <>
+      <div
+        data-testid="order-confirmation-page"
+        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8 text-white print:hidden no-print"
+      >
       {/* Hero Confirmation Banner */}
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: 14 }}
@@ -136,22 +151,41 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 shrink-0">
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           <button
             type="button"
-            onClick={() => triggerFestiveConfetti('order')}
-            className="px-4 py-2.5 rounded-full bg-[#4E0C47] hover:bg-[#6B1261] text-[#FFE066] border border-[#FFC700]/45 text-xs font-bold inline-flex items-center gap-2 transition-colors cursor-pointer"
+            data-testid="download-invoice-pdf-btn"
+            onClick={handleDownloadInvoicePdf}
+            className="px-4 py-2.5 rounded-full bg-white text-[#240323] hover:bg-[#FFF5D6] border border-[#FFC700] text-xs font-extrabold inline-flex items-center gap-2 shadow-sm transition-colors cursor-pointer"
           >
-            <PartyPopper className="w-4 h-4" />
-            <span>Celebrate</span>
+            <Download className="w-4 h-4 text-[#5C0E54]" />
+            <span>{pdfDownloaded ? 'Invoice PDF Downloaded ✓' : 'Download Invoice (PDF)'}</span>
           </button>
           <button
             type="button"
+            data-testid="toggle-short-invoice-btn"
+            onClick={() => setShowShortInvoice((prev) => !prev)}
+            className="px-3.5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white border border-white/25 text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <Receipt className="w-4 h-4 text-[#FFC700]" />
+            <span>{showShortInvoice ? 'Hide Short Invoice' : 'View Short Invoice'}</span>
+          </button>
+          <button
+            type="button"
+            data-testid="print-invoice-btn"
             onClick={() => window.print()}
-            className="px-4 py-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white border border-white/25 text-xs font-semibold inline-flex items-center gap-2 transition-colors cursor-pointer"
+            className="px-3.5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white border border-white/25 text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Printer className="w-4 h-4" />
-            <span>Print Receipt</span>
+            <span>Print</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => triggerFestiveConfetti('order')}
+            className="px-3.5 py-2.5 rounded-full bg-[#4E0C47] hover:bg-[#6B1261] text-[#FFE066] border border-[#FFC700]/45 text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <PartyPopper className="w-4 h-4" />
+            <span>Celebrate</span>
           </button>
           <button
             type="button"
@@ -164,6 +198,40 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
           </button>
         </div>
       </motion.div>
+
+      {showShortInvoice && (
+        <div className="bg-[#340732] rounded-3xl border border-[#FFC700]/40 p-5 sm:p-6 space-y-4 shadow-lg">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-bold text-white">Short Invoice Preview (A5 Format)</h2>
+              <p className="text-[11px] text-[#E3C4DF]">
+                Compact white-paper invoice formatted cleanly for PDF download and thermal/A5/A4 printing.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleDownloadInvoicePdf}
+                className="px-4 py-2 rounded-full bg-gradient-to-r from-[#FF7A00] to-[#FFC700] text-[#240323] text-xs font-extrabold inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download PDF</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Print Short Invoice</span>
+              </button>
+            </div>
+          </div>
+          <div className="max-w-xl mx-auto">
+            <ShortInvoiceCard order={order} currency={currentCurrency} settings={settings} />
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         <div className="lg:col-span-7 space-y-6">
@@ -450,5 +518,11 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
         </div>
       </div>
     </div>
+
+    <div data-print-scope="page" className="hidden print:block max-w-xl mx-auto">
+      <ShortInvoiceCard order={order} currency={currentCurrency} settings={settings} />
+    </div>
+  </>
   );
 };
+

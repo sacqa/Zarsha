@@ -567,10 +567,32 @@ class StoreDatabase {
     const initialLen = this.products.length;
     this.products = this.products.filter((p) => p.id !== id);
     if (this.products.length !== initialLen) {
+      this.collections = this.collections.map((c) =>
+        c.productIds.includes(id)
+          ? { ...c, productIds: c.productIds.filter((pid) => pid !== id) }
+          : c
+      );
       this.saveAll();
       return true;
     }
     return false;
+  }
+
+  public deleteProductsBulk(ids: string[]): number {
+    if (!ids || ids.length === 0) return 0;
+    const idSet = new Set(ids);
+    const initialLen = this.products.length;
+    this.products = this.products.filter((p) => !idSet.has(p.id));
+    const deletedCount = initialLen - this.products.length;
+    if (deletedCount > 0) {
+      this.collections = this.collections.map((c) =>
+        c.productIds.some((pid) => idSet.has(pid))
+          ? { ...c, productIds: c.productIds.filter((pid) => !idSet.has(pid)) }
+          : c
+      );
+      this.saveAll();
+    }
+    return deletedCount;
   }
 
   public importShopifyCsvProducts(
